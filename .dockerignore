@@ -1,0 +1,10 @@
+node_modules/
+
+.conf/
+*.env
+.env.*
+
+dist/
+
+videos/
+uploads/

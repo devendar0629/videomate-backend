@@ -1,0 +1,32 @@
+services:
+  task_broker:
+    image: redis:8.4-alpine
+    container_name: videomate_task_broker
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - task_broker_data:/data
+    networks:
+      - backend_network
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+
+  database:
+    image: mongo:8.2-noble
+    container_name: videomate_database
+    env_file:
+      - .db.env
+    ports:
+      - "27017:27017"
+    networks:
+      - backend_network
+    volumes:
+      - database_data:/data/db
+
+networks:
+  backend_network:
+
+volumes:
+  database_data:
+  task_broker_data:
