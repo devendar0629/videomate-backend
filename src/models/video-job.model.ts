@@ -2,11 +2,6 @@ import mongoose from "mongoose";
 
 const videoJobSchema = new mongoose.Schema(
     {
-        type: {
-            type: String,
-            required: true,
-            enum: ["transcode", "generate_thumbnail"],
-        },
         videoId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Video",

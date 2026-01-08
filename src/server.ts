@@ -1,6 +1,7 @@
 import e from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import settings from "../settings";
 
 const app = e();
 
@@ -14,8 +15,9 @@ app.use(
 );
 app.use(cookieParser());
 
-app.use("/uploads", e.static("uploads"));
-app.use("/videos", e.static("videos"));
+app.use("/uploads", e.static(settings.UPLOADS_DIR));
+app.use("/videos", e.static(settings.OUTPUT_VIDEOS_DIR));
+app.use("/avatars", e.static(settings.AVATARS_DIR));
 
 // -------------- ROUTING --------------
 

@@ -1,27 +1,35 @@
 import { Worker } from "bullmq";
-import { transcodeVideo } from "../processors/transcode-video";
+import { processVideo } from "../processors/process-video";
 import { connectDB } from "../lib/db";
 
-async function initVideoWorker() {
+async function initVideoProcessorWorker() {
     await connectDB().then(() => {
         console.log(
-            "✅ VideoWorker :: Connected to the database successfully."
+            "✅ VideoProcessor Worker :: Connected to the database successfully."
         );
     });
 
-    const videoWorker = new Worker("transcode-video", transcodeVideo, {
-        connection: {
-            host: process.env.REDIS_HOST,
-            port: parseInt(process.env.REDIS_PORT || "6379"),
-            password: process.env.REDIS_PASSWORD,
-        },
-    });
+    // Create a new BullMQ worker for video transcoding
+    const videoProcessorWorker = new Worker(
+        "process-video-queue",
+        processVideo,
+        {
+            connection: {
+                host: process.env.REDIS_HOST,
+                port: parseInt(process.env.REDIS_PORT || "6379"),
+                password: process.env.REDIS_PASSWORD,
+            },
+        }
+    );
 
-    videoWorker.on("ready", () => {
-        console.log("✨ VideoWorker is ready.");
+    videoProcessorWorker.on("ready", () => {
+        console.log("✨ VideoProcessor Worker is ready.");
     });
 }
 
-initVideoWorker().catch((err) => {
-    console.error("❌ VideoWorker :: Failed to initialize video worker:", err);
+initVideoProcessorWorker().catch((err) => {
+    console.error(
+        "❌ VideoProcessor Worker :: Failed to initialize video worker:",
+        err
+    );
 });

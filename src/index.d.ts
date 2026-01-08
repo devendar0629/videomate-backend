@@ -1,13 +1,3 @@
-type Resolution =
-    | "2160p"
-    | "1440p"
-    | "1080p"
-    | "720p"
-    | "480p"
-    | "360p"
-    | "240p"
-    | "144p";
-
 type ResolutionSettings = {
     name: string;
     width: number;
@@ -16,3 +6,13 @@ type ResolutionSettings = {
     maxrate: string;
     bufsize: string;
 };
+
+type ResolutionName =
+    | "4k"
+    | "1440p"
+    | "1080p"
+    | "720p"
+    | "480p"
+    | "360p"
+    | "240p"
+    | "144p";

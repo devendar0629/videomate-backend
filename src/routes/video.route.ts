@@ -16,6 +16,8 @@ import {
     getAllVideos,
     getVideo,
     publish,
+    searchVideos,
+    watchVideo,
 } from "../controllers/video.controller";
 
 router.post(
@@ -31,7 +33,9 @@ router.post(
 );
 
 router.get("/all", getAllVideos);
+router.get("/search", searchVideos);
 router.get("/:videoId", getVideo);
 router.delete("/:videoId", deleteVideo);
+router.get("/watch/:videoId", watchVideo);
 
 export default router;

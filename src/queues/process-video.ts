@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 
-const videoQueue = new Queue("transcode-video", {
+const videoProcessQueue = new Queue("process-video-queue", {
     connection: {
         host: process.env.REDIS_HOST,
         port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
@@ -12,4 +12,4 @@ const videoQueue = new Queue("transcode-video", {
     },
 });
 
-export default videoQueue;
+export default videoProcessQueue;

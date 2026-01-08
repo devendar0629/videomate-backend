@@ -2,12 +2,13 @@ import type { RequestHandler } from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import settings from "../../settings";
-import videoQueue from "../queues/video";
+import videoProcessQueue from "../queues/process-video";
 import Video from "../models/video.model";
 import VideoJob from "../models/video-job.model";
 import z from "zod";
 import { formatZodErrors, mongooseObjectIdValidator } from "../utils/helpers";
 import User from "../models/user.model";
+import mongoose from "mongoose";
 
 // --------------------------------- VALIDATION SCHEMAS ---------------------------------
 
@@ -74,9 +75,8 @@ const publish: RequestHandler = async (req, res) => {
     }
 
     const videoFilePath = videoFile.path;
-    const outputPath = path.join(
-        settings.BASE_DIR,
-        "videos",
+    const videoOutputPath = path.join(
+        settings.OUTPUT_VIDEOS_DIR,
         videoFile.filename
     );
 
@@ -95,17 +95,14 @@ const publish: RequestHandler = async (req, res) => {
         $push: { videos: newVideoDoc._id },
     });
 
-    // Enqueue a job to transcode the video
-    const videoJob = await videoQueue.add("transcode", {
+    const videoProcessJob = await videoProcessQueue.add("process", {
         videoPath: videoFilePath,
-        outputPath,
+        outputPath: videoOutputPath,
         videoDocId: newVideoDoc._id,
     });
 
-    // Create a VideoJob document to enable tracking of job
     await VideoJob.create({
-        jobId: videoJob.id,
-        type: "transcode",
+        jobId: videoProcessJob.id,
         videoId: newVideoDoc._id,
     });
 
@@ -119,7 +116,6 @@ const getAllVideos: RequestHandler = async (req, res) => {
     const videos = await Video.find({ userId: req.user?.id }).select([
         "-userId",
         "-__v",
-        "-uniqueFileName",
     ]);
 
     return res.status(200).json(videos);
@@ -131,7 +127,7 @@ const getVideo: RequestHandler = async (req, res) => {
     if (!mongooseObjectIdValidator.safeParse(videoId).success) {
         return res.status(400).json({
             message: "Invalid video ID",
-            errCode: "INVALID_VIDEO_ID",
+            errorCode: "INVALID_VIDEO_ID",
         });
     }
 
@@ -156,7 +152,7 @@ const deleteVideo: RequestHandler = async (req, res) => {
     if (!mongooseObjectIdValidator.safeParse(videoId).success) {
         return res.status(400).json({
             message: "Invalid video ID",
-            errCode: "INVALID_VIDEO_ID",
+            errorCode: "INVALID_VIDEO_ID",
         });
     }
 
@@ -177,15 +173,14 @@ const deleteVideo: RequestHandler = async (req, res) => {
     await videoDoc.deleteOne();
 
     if (videoJob) {
-        await videoQueue.remove(videoJob.jobId);
+        await videoProcessQueue.remove(videoJob.jobId);
         await videoJob.deleteOne();
     }
 
     await fs
-        .rmdir(
-            path.join(settings.BASE_DIR, "videos", videoDoc.uniqueFileName),
-            { recursive: true }
-        )
+        .rmdir(path.join(settings.OUTPUT_VIDEOS_DIR, videoDoc.uniqueFileName), {
+            recursive: true,
+        })
         .catch(() => {});
 
     await fs
@@ -197,4 +192,134 @@ const deleteVideo: RequestHandler = async (req, res) => {
     return res.status(204).json({});
 };
 
-export { publish, getVideo, getAllVideos, deleteVideo };
+const searchVideos: RequestHandler = async (req, res) => {
+    const query = req.query.q as string;
+
+    if (query?.trim()?.length === 0) {
+        return res.status(400).json({
+            message: "Query cannot be empty",
+            errCode: "INVALID_QUERY",
+        });
+    }
+
+    const matchingVideos = await Video.aggregate([
+        {
+            $match: {
+                visibility: "public",
+                status: "finished",
+                title: { $regex: query, $options: "i" },
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "uploader",
+                pipeline: [
+                    {
+                        $project: {
+                            _id: 0,
+                            name: 1,
+                            avatar: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $project: {
+                title: 1,
+                description: 1,
+                uniqueFileName: 1,
+                availableResolutions: 1,
+                createdAt: 1,
+                uploader: 1,
+            },
+        },
+        {
+            $unwind: {
+                path: "$uploader",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $sort: { createdAt: -1 },
+        },
+    ]);
+
+    return res.status(200).json(matchingVideos);
+};
+
+const watchVideo: RequestHandler = async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!mongooseObjectIdValidator.safeParse(videoId).success) {
+        return res.status(400).json({
+            message: "Invalid video ID",
+            errorCode: "INVALID_VIDEO_ID",
+        });
+    }
+
+    const videoDoc = await Video.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(videoId),
+                visibility: "public",
+                status: "finished",
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "uploader",
+                pipeline: [
+                    {
+                        $project: {
+                            name: 1,
+                            avatar: 1,
+                            _id: 0,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $project: {
+                uniqueFileName: 1,
+                title: 1,
+                description: 1,
+                previewImage: 1,
+                uploader: 1,
+                availableResolutions: 1,
+                createdAt: 1,
+            },
+        },
+        {
+            $unwind: {
+                path: "$uploader",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+    ]);
+
+    if (videoDoc.length === 0) {
+        return res.status(404).json({
+            message: "Video not found",
+            errorCode: "VIDEO_NOT_FOUND",
+        });
+    }
+
+    return res.status(200).json(videoDoc);
+};
+
+export {
+    publish,
+    getVideo,
+    getAllVideos,
+    deleteVideo,
+    searchVideos,
+    watchVideo,
+};

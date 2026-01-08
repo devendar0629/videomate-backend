@@ -1,3 +1,5 @@
+import path from "node:path";
+
 // All paths relative to src directory
 const SERVER_PORT = process.env.SERVER_PORT ?? 3000;
 
@@ -72,6 +74,10 @@ const RESOLUTION_SETTINGS = [
     },
 ];
 
+const OUTPUT_VIDEOS_DIR = path.join(BASE_DIR, "/data/videos");
+const UPLOADS_DIR = path.join(BASE_DIR, "/uploads");
+const AVATARS_DIR = path.join(BASE_DIR, "/data/avatars");
+
 const ACCESS_TOKEN_EXP_SECS = parseInt(
     process.env.ACCESS_TOKEN_EXP_SECS ?? "900"
 );
@@ -93,10 +99,15 @@ const settings = {
     REFRESH_TOKEN_EXP_SECS,
     ACCESS_TOKEN_SECRET,
     REFRESH_TOKEN_SECRET,
+    OUTPUT_VIDEOS_DIR,
+    UPLOADS_DIR,
+    AVATARS_DIR,
 };
 
 export {
     SERVER_PORT,
+    UPLOADS_DIR,
+    OUTPUT_VIDEOS_DIR,
     SUPPORTED_VIDEO_FORMAT_EXTENSIONS,
     MAX_VIDEO_FILE_SIZE_BYTES,
     MAX_VIDEO_FILE_SIZE_MEGABYTES,
@@ -106,5 +117,6 @@ export {
     REFRESH_TOKEN_EXP_SECS,
     ACCESS_TOKEN_SECRET,
     REFRESH_TOKEN_SECRET,
+    AVATARS_DIR,
 };
 export default settings;

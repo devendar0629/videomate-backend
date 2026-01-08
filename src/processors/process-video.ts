@@ -7,23 +7,47 @@ import {
     buildFFmpegTranscodeArgs,
     getVideoMetaData,
 } from "../utils/video/helpers";
+import VideoJob from "../models/video-job.model";
 
-type ResolutionName =
-    | "4k"
-    | "1440p"
-    | "1080p"
-    | "720p"
-    | "480p"
-    | "360p"
-    | "240p"
-    | "144p";
+const generateThumbnail = async (videoFilePath: string, outputPath: string) => {
+    return new Promise<void>((resolve, reject) => {
+        // prettier-ignore
+        const args = [
+            "-ss", "00:00:00",
+            "-i", videoFilePath,
+            "-frames:v", "1",
+            "-update", "1",
+            outputPath,
+        ];
+
+        const generateThumbnailFFmpegProcess = spawn("ffmpeg", args);
+
+        let ffmpegStderr = "";
+
+        generateThumbnailFFmpegProcess.stderr.on("data", (chunk) => {
+            ffmpegStderr += chunk.toString();
+        });
+
+        generateThumbnailFFmpegProcess.on("close", (code) => {
+            if (code !== 0) {
+                reject(
+                    new Error(
+                        `ffmpeg transcoding failed with code=(${code}): ${ffmpegStderr}`
+                    )
+                );
+                return;
+            }
+
+            resolve();
+        });
+    });
+};
 
 const transcodeVideoToDownscaleResolutions = async (
     inputFilePath: string,
     outputPath: string
 ): Promise<ResolutionName[]> => {
     return new Promise(async (resolve, reject) => {
-        // Create output directory
         await fs.mkdir(outputPath, { recursive: true }).catch((err) => {
             console.error("❌ Error creating output directory:", err);
             throw err;
@@ -76,7 +100,7 @@ const transcodeVideoToDownscaleResolutions = async (
     });
 };
 
-const transcodeVideo: Processor = async (job) => {
+const processVideo: Processor = async (job) => {
     const { videoPath, outputPath, videoDocId } = job.data;
 
     console.log(
@@ -94,17 +118,19 @@ const transcodeVideo: Processor = async (job) => {
         videoDoc.status = "processing";
         await videoDoc.save();
 
-        const availableResolutions = await transcodeVideoToDownscaleResolutions(
-            videoPath,
-            outputPath
-        );
+        const [availableResolutions] = await Promise.all([
+            transcodeVideoToDownscaleResolutions(videoPath, outputPath),
+            generateThumbnail(videoPath, `${outputPath}/thumbnail.jpg`),
+        ]);
 
         videoDoc.availableResolutions = availableResolutions;
-
         videoDoc.status = "finished";
-        await videoDoc.save();
 
-        await fs.unlink(videoPath);
+        await Promise.all([
+            videoDoc.save(), // Save the updated video document
+            fs.unlink(videoPath), // Delete the original uploaded video file
+            VideoJob.findOneAndDelete({ jobId: job.id }), // Clean up the VideoJob entry
+        ]);
 
         console.log(
             `Job ${job.id} :: Transcoding completed for video ID: ${videoDocId}`
@@ -116,4 +142,4 @@ const transcodeVideo: Processor = async (job) => {
     }
 };
 
-export { transcodeVideo };
+export { processVideo };
