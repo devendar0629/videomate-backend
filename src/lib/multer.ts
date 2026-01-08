@@ -3,11 +3,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import settings from "../../settings";
 
-const getMulterMiddleware = (options?: MulterOptions) => {
+const getMulterMiddleware = (options?: MulterOptions, storagePath?: string) => {
     return multer({
         storage: multer.diskStorage({
             destination: (req, file, cb) => {
-                cb(null, settings.UPLOADS_DIR);
+                cb(null, storagePath ?? settings.UPLOADS_DIR);
             },
             filename: (req, file, cb) => {
                 const ext = path.extname(file.originalname);
