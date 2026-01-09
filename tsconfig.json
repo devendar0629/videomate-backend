@@ -26,5 +26,4 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
   },
-  "exclude": ["/data/videos/**/*"]
 }

@@ -13,11 +13,12 @@ router.use(ensureAccessToken);
 
 import {
     deleteVideo,
-    getAllVideos,
-    getVideo,
+    getAll,
+    get,
     publish,
-    searchVideos,
-    watchVideo,
+    search,
+    watch,
+    edit,
 } from "../controllers/video.controller";
 
 router.post(
@@ -32,10 +33,21 @@ router.post(
     publish
 );
 
-router.get("/all", getAllVideos);
-router.get("/search", searchVideos);
-router.get("/:videoId", getVideo);
+router.get("/all", getAll);
+router.get("/search", search);
+router.get("/watch/:videoId", watch);
+router.get("/:videoId", get);
 router.delete("/:videoId", deleteVideo);
-router.get("/watch/:videoId", watchVideo);
+router.patch(
+    "/:videoId",
+
+    getMulterMiddleware({
+        limits: {
+            fileSize: settings.MAX_VIDEO_FILE_SIZE_BYTES,
+        },
+    }).single("file"),
+
+    edit
+);
 
 export default router;

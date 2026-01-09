@@ -12,39 +12,71 @@ import mongoose from "mongoose";
 
 // --------------------------------- VALIDATION SCHEMAS ---------------------------------
 
-const publishSchema = z.strictObject({
-    file: z
-        .custom<Express.Multer.File>()
-        .refine((file) => !!file, {
-            error: "A valid video file is required",
-        })
-        .refine((file) => !!file && file.mimetype.startsWith("video/"), {
-            error: "Uploaded file must be a video",
-        })
-        .refine((file) => !!file && file.size <= 500 * 1024 * 1024, {
-            error: "Video file size must not exceed 500MB",
-        }),
+const _publishSchema = z.strictObject(
+    {
+        file: z
+            .custom<Express.Multer.File>()
+            .refine((file) => !!file, {
+                error: "A valid video file is required",
+            })
+            .refine((file) => !!file && file.mimetype.startsWith("video/"), {
+                error: "Uploaded file must be a video",
+            })
+            .refine((file) => !!file && file.size <= 500 * 1024 * 1024, {
+                error: "Video file size must not exceed 500MB",
+            }),
 
-    title: z.string("Invalid title").trim().min(1, "Title should not be empty"),
-    description: z
-        .string()
-        .trim()
-        .max(1024, "Description can have a maximum of 1024 characters")
-        .optional(),
-    visibility: z
-        .enum(
-            ["public", "private"],
-            "Visibility must be either 'public' or 'private'"
-        )
-        .default("private"),
-});
+        title: z
+            .string("Invalid title")
+            .trim()
+            .min(1, "Title should not be empty"),
+        description: z
+            .string()
+            .trim()
+            .max(1024, "Description can have a maximum of 1024 characters")
+            .optional(),
+        visibility: z
+            .enum(
+                ["public", "private"],
+                "Visibility must be either 'public' or 'private'"
+            )
+            .default("private"),
+    },
+    "Invalid payload"
+);
+
+const _editSchema = z
+    .strictObject(
+        {
+            title: _publishSchema.shape.title.optional(),
+            description: _publishSchema.shape.description.optional(),
+            visibility: z
+                .enum(
+                    ["public", "private"],
+                    "Visibility must be either 'public' or 'private'"
+                )
+                .optional(),
+            file: _publishSchema.shape.file.optional(),
+        },
+        "Invalid payload"
+    )
+    .refine(
+        (data) => {
+            return Array.from(Object.values(data)).some(
+                (val) => val !== undefined
+            );
+        },
+        {
+            message: "At least one field must be provided for update",
+        }
+    );
 
 // --------------------------------- CONTROLLERS ---------------------------------
 
 const publish: RequestHandler = async (req, res) => {
     const reqBody = req.body;
 
-    const bodyParseResult = publishSchema.safeParse({
+    const bodyParseResult = _publishSchema.safeParse({
         file: req.file,
         title: reqBody.title,
         description: reqBody.description,
@@ -112,7 +144,7 @@ const publish: RequestHandler = async (req, res) => {
     });
 };
 
-const getAllVideos: RequestHandler = async (req, res) => {
+const getAll: RequestHandler = async (req, res) => {
     const videos = await Video.find({ userId: req.user?.id }).select([
         "-userId",
         "-__v",
@@ -121,7 +153,7 @@ const getAllVideos: RequestHandler = async (req, res) => {
     return res.status(200).json(videos);
 };
 
-const getVideo: RequestHandler = async (req, res) => {
+const get: RequestHandler = async (req, res) => {
     const videoId = req.params.videoId;
 
     if (!mongooseObjectIdValidator.safeParse(videoId).success) {
@@ -192,7 +224,7 @@ const deleteVideo: RequestHandler = async (req, res) => {
     return res.status(204).json({});
 };
 
-const searchVideos: RequestHandler = async (req, res) => {
+const search: RequestHandler = async (req, res) => {
     const query = req.query.q as string;
 
     if (query?.trim()?.length === 0) {
@@ -251,7 +283,7 @@ const searchVideos: RequestHandler = async (req, res) => {
     return res.status(200).json(matchingVideos);
 };
 
-const watchVideo: RequestHandler = async (req, res) => {
+const watch: RequestHandler = async (req, res) => {
     const videoId = req.params.videoId;
 
     if (!mongooseObjectIdValidator.safeParse(videoId).success) {
@@ -315,11 +347,90 @@ const watchVideo: RequestHandler = async (req, res) => {
     return res.status(200).json(videoDoc);
 };
 
-export {
-    publish,
-    getVideo,
-    getAllVideos,
-    deleteVideo,
-    searchVideos,
-    watchVideo,
+const edit: RequestHandler = async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!mongooseObjectIdValidator.safeParse(videoId).success) {
+        return res.status(400).json({
+            message: "Invalid video ID",
+            errorCode: "INVALID_VIDEO_ID",
+        });
+    }
+
+    const bodyParseResult = _editSchema.safeParse({
+        file: req.file,
+        ...req.body,
+    });
+
+    if (!bodyParseResult.success) {
+        return res.status(400).json({
+            message: "Invalid payload",
+            errors: formatZodErrors(bodyParseResult.error.issues),
+            errorCode: "INVALID_PAYLOAD",
+        });
+    }
+
+    const dataToUpdate: Partial<{
+        title: string;
+        description: string;
+        visibility: "public" | "private";
+        file: Express.Multer.File | null;
+    }> = {};
+
+    Object.entries(bodyParseResult.data).forEach(([key, val]) => {
+        if (val !== undefined) {
+            (dataToUpdate as any)[key] = val;
+        }
+    });
+
+    const videoDoc = await Video.findOneAndUpdate(
+        {
+            _id: videoId,
+            userId: req.user?.id,
+        },
+        dataToUpdate,
+        { new: true }
+    ).select(["-userId", "-__v"]);
+
+    if (!videoDoc) {
+        return res.status(404).json({
+            message: "Video not found",
+            errorCode: "VIDEO_NOT_FOUND",
+        });
+    }
+
+    if (dataToUpdate.file) {
+        const oldVideoPath = path.join(
+            settings.OUTPUT_VIDEOS_DIR,
+            videoDoc.uniqueFileName
+        );
+
+        const newVideoPath = path.join(
+            settings.OUTPUT_VIDEOS_DIR,
+            dataToUpdate.file.filename
+        );
+
+        const videoProcessJob = await videoProcessQueue.add("process", {
+            videoPath: dataToUpdate.file.path,
+            outputPath: newVideoPath,
+            videoDocId: videoDoc._id,
+            oldVideoPath,
+            newOriginalFileName: dataToUpdate.file.originalname,
+        });
+
+        await VideoJob.create({
+            jobId: videoProcessJob.id,
+            videoId: videoDoc._id,
+        });
+
+        videoDoc.status = "waiting";
+        await videoDoc.save();
+    }
+
+    return res.status(200).json({
+        message: "Video updated successfully",
+        data: videoDoc,
+    });
 };
+
+export { publish, get, getAll, deleteVideo, search, watch, edit };

@@ -6,12 +6,15 @@ import settings from "../../settings";
 
 // ------------------- VALIDATION SCHEMAS -------------------
 
-const _loginSchema = z.strictObject({
-    email: z.email("Invalid email address"),
-    password: z.string().min(8, {
-        error: "Password must be at least 8 characters long",
-    }),
-});
+const _loginSchema = z.strictObject(
+    {
+        email: z.email("Invalid email address"),
+        password: z.string().min(8, {
+            error: "Password must be at least 8 characters long",
+        }),
+    },
+    "Invalid payload"
+);
 const _signupSchema = _loginSchema.extend({
     name: z.string().min(2, {
         error: "Name must be at least 2 characters long",

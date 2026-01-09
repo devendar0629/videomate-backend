@@ -54,10 +54,6 @@ const videoSchema = new mongoose.Schema(
             required: true,
             enum: ["public", "private"],
         },
-        errorMessage: {
-            type: String,
-            default: null,
-        },
     },
     { timestamps: true }
 );

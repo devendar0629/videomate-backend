@@ -4,21 +4,27 @@ import User from "../models/user.model";
 import { formatZodErrors } from "../utils/helpers";
 
 const _editDetailsPayloadSchema = z
-    .strictObject({
-        name: z.string().min(1).max(100).optional(),
-        avatar: z
-            .custom<Express.Multer.File>()
-            .refine((file) => !!file, {
-                error: "A valid image file is required",
-            })
-            .refine((file) => !!file && file.mimetype.startsWith("image/"), {
-                error: "Uploaded file must be an image",
-            })
-            .refine((file) => !!file && file.size <= 2 * 1024 * 1024, {
-                error: "Image file size must not exceed 2MB",
-            })
-            .optional(),
-    })
+    .strictObject(
+        {
+            name: z.string().min(1).max(100).optional(),
+            avatar: z
+                .custom<Express.Multer.File>()
+                .refine((file) => !!file, {
+                    error: "A valid image file is required",
+                })
+                .refine(
+                    (file) => !!file && file.mimetype.startsWith("image/"),
+                    {
+                        error: "Uploaded file must be an image",
+                    }
+                )
+                .refine((file) => !!file && file.size <= 2 * 1024 * 1024, {
+                    error: "Image file size must not exceed 2MB",
+                })
+                .optional(),
+        },
+        "Invalid payload"
+    )
     .refine(
         (data) => {
             return !!data.name || !!data.avatar;
@@ -49,7 +55,7 @@ const editDetails: RequestHandler = async (req, res) => {
     if (name) updateData.name = name;
     if (avatar) updateData.avatar = `/avatars/${avatar.filename}`;
 
-    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+    await User.findByIdAndUpdate(userId, updateData, {
         new: true,
     })
         .select("name email avatar -_id")
@@ -57,7 +63,6 @@ const editDetails: RequestHandler = async (req, res) => {
 
     return res.status(200).json({
         message: "User details updated successfully",
-        data: { user: updatedUser },
     });
 };
 

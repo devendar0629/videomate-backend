@@ -8,6 +8,7 @@ import {
     getVideoMetaData,
 } from "../utils/video/helpers";
 import VideoJob from "../models/video-job.model";
+import path from "path";
 
 const generateThumbnail = async (videoFilePath: string, outputPath: string) => {
     return new Promise<void>((resolve, reject) => {
@@ -101,7 +102,13 @@ const transcodeVideoToDownscaleResolutions = async (
 };
 
 const processVideo: Processor = async (job) => {
-    const { videoPath, outputPath, videoDocId } = job.data;
+    const {
+        videoPath,
+        outputPath,
+        videoDocId,
+        oldVideoPath,
+        newOriginalFileName,
+    } = job.data;
 
     console.log(
         `Job ${job.id} :: Starting transcoding for video ID: ${videoDocId}`
@@ -125,6 +132,11 @@ const processVideo: Processor = async (job) => {
 
         videoDoc.availableResolutions = availableResolutions;
         videoDoc.status = "finished";
+        videoDoc.uniqueFileName = path.basename(outputPath);
+
+        if (newOriginalFileName) {
+            videoDoc.originalFileName = newOriginalFileName;
+        }
 
         await Promise.all([
             videoDoc.save(), // Save the updated video document
@@ -132,9 +144,9 @@ const processVideo: Processor = async (job) => {
             VideoJob.findOneAndDelete({ jobId: job.id }), // Clean up the VideoJob entry
         ]);
 
-        console.log(
-            `Job ${job.id} :: Transcoding completed for video ID: ${videoDocId}`
-        );
+        if (oldVideoPath) {
+            await fs.rmdir(oldVideoPath, { recursive: true });
+        }
     } catch (error) {
         await Video.findByIdAndUpdate(videoDocId, { status: "error" });
 

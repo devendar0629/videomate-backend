@@ -9,7 +9,7 @@ const router = Router();
 router.use(ensureAccessToken);
 
 router.patch(
-    "",
+    "/profile",
 
     getMulterMiddleware(
         {
