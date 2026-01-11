@@ -19,6 +19,8 @@ import {
     search,
     watch,
     edit,
+    like,
+    dislike,
 } from "../controllers/video.controller";
 
 router.post(
@@ -32,10 +34,9 @@ router.post(
 
     publish
 );
-
 router.get("/all", getAll);
 router.get("/search", search);
-router.get("/watch/:videoId", watch);
+router.get("/:videoId/watch", watch);
 router.get("/:videoId", get);
 router.delete("/:videoId", deleteVideo);
 router.patch(
@@ -49,5 +50,7 @@ router.patch(
 
     edit
 );
+router.post("/:videoId/like", like);
+router.post("/:videoId/dislike", dislike);
 
 export default router;

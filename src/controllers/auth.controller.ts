@@ -107,7 +107,7 @@ const getCurrentUser: RequestHandler = async (req, res) => {
 
     if (!user) {
         return res.status(404).json({
-            errorCode: "USER_NOT_FOUND",
+            errorCode: "NOT_FOUND",
             error: "User not found",
         });
     }
@@ -124,7 +124,7 @@ const getCurrentUser: RequestHandler = async (req, res) => {
 };
 
 const renewTokens: RequestHandler = async (req, res) => {
-    const userId = (req as any).user.id;
+    const userId = req.user?.id;
 
     const user = await User.findById(userId);
 

@@ -74,7 +74,7 @@ const getProfile: RequestHandler = async (req, res) => {
     if (!user) {
         return res.status(404).json({
             message: "User not found",
-            errorCode: "USER_NOT_FOUND",
+            errorCode: "NOT_FOUND",
         });
     }
 

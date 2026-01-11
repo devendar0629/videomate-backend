@@ -2,12 +2,12 @@ import fs from "fs/promises";
 import { spawn } from "child_process";
 import { RESOLUTION_SETTINGS } from "../../settings";
 import type { Processor } from "bullmq";
-import Video from "../models/video.model";
+import Video from "../models/video/video.model";
 import {
     buildFFmpegTranscodeArgs,
     getVideoMetaData,
 } from "../utils/video/helpers";
-import VideoJob from "../models/video-job.model";
+import VideoJob from "../models/video/job.model";
 import path from "path";
 
 const generateThumbnail = async (videoFilePath: string, outputPath: string) => {

@@ -23,7 +23,7 @@ const videoSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
-        userId: {
+        uploader: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: true,

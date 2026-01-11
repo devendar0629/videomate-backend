@@ -3,12 +3,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import settings from "../../settings";
 import videoProcessQueue from "../queues/process-video";
-import Video from "../models/video.model";
-import VideoJob from "../models/video-job.model";
+import Video, { type TVideo } from "../models/video/video.model";
+import VideoJob from "../models/video/job.model";
 import z from "zod";
 import { formatZodErrors, mongooseObjectIdValidator } from "../utils/helpers";
 import User from "../models/user.model";
 import mongoose from "mongoose";
+import VideoMetrics from "../models/video/metrics.model";
+import VideoReaction from "../models/video/reaction.model";
 
 // --------------------------------- VALIDATION SCHEMAS ---------------------------------
 
@@ -119,24 +121,29 @@ const publish: RequestHandler = async (req, res) => {
         description,
         visibility,
         path: videoFilePath,
-        userId: req.user?.id,
+        uploader: req.user?.id,
     });
 
-    // Add this video to the user's list of videos
-    await User.findByIdAndUpdate(req.user?.id, {
-        $push: { videos: newVideoDoc._id },
-    });
+    const [_, videoProcessJob] = await Promise.all([
+        User.findByIdAndUpdate(req.user?.id, {
+            $push: { videos: newVideoDoc._id },
+        }),
+        videoProcessQueue.add("process", {
+            videoPath: videoFilePath,
+            outputPath: videoOutputPath,
+            videoDocId: newVideoDoc._id,
+        }),
+    ]);
 
-    const videoProcessJob = await videoProcessQueue.add("process", {
-        videoPath: videoFilePath,
-        outputPath: videoOutputPath,
-        videoDocId: newVideoDoc._id,
-    });
-
-    await VideoJob.create({
-        jobId: videoProcessJob.id,
-        videoId: newVideoDoc._id,
-    });
+    await Promise.all([
+        VideoJob.create({
+            jobId: videoProcessJob.id,
+            videoId: newVideoDoc._id,
+        }),
+        VideoMetrics.create({
+            videoId: newVideoDoc._id.toString(),
+        }),
+    ]);
 
     return res.status(202).json({
         message: "Video upload accepted.",
@@ -144,15 +151,68 @@ const publish: RequestHandler = async (req, res) => {
     });
 };
 
+// TODO: Add metrics
 const getAll: RequestHandler = async (req, res) => {
-    const videos = await Video.find({ userId: req.user?.id }).select([
-        "-userId",
-        "-__v",
+    const page = parseInt((req.query.page as string) ?? "1", 10);
+    const limit = parseInt((req.query.limit as string) ?? "10", 10);
+
+    const aggregatedVideos = await Video.aggregate([
+        {
+            $match: {
+                uploader: new mongoose.Types.ObjectId(req.user?.id),
+            },
+        },
+        {
+            $lookup: {
+                from: "videometrics",
+                as: "metrics",
+                let: { videoIdStr: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $eq: ["$videoId", "$$videoIdStr"],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            views: 1,
+                            likes: 1,
+                            dislikes: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $unwind: {
+                path: "$metrics",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $sort: { createdAt: -1 },
+        },
+        {
+            $project: {
+                uploader: 0,
+                __v: 0,
+            },
+        },
+        {
+            $skip: (page - 1) * limit,
+        },
+        {
+            $limit: limit,
+        },
     ]);
 
-    return res.status(200).json(videos);
+    return res.status(200).json(aggregatedVideos);
 };
 
+// TODO: Add metrics
 const get: RequestHandler = async (req, res) => {
     const videoId = req.params.videoId;
 
@@ -163,19 +223,67 @@ const get: RequestHandler = async (req, res) => {
         });
     }
 
+    const aggregation = await Video.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(videoId),
+                uploader: new mongoose.Types.ObjectId(req.user?.id),
+            },
+        },
+        {
+            $lookup: {
+                from: "videometrics",
+                as: "metrics",
+                let: { videoIdStr: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $eq: ["$videoId", "$$videoIdStr"],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            views: 1,
+                            likes: 1,
+                            dislikes: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $unwind: {
+                path: "$metrics",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $project: {
+                uploader: 0,
+                __v: 0,
+            },
+        },
+        {
+            $limit: 1,
+        },
+    ]);
+
     const videoDoc = await Video.findOne({
         _id: videoId,
-        userId: req.user?.id,
-    }).select(["-userId", "-__v"]);
+        uploader: req.user?.id,
+    }).select(["-uploader", "-__v"]);
 
     if (!videoDoc) {
         return res.status(404).json({
             message: "Video not found",
-            errorCode: "VIDEO_NOT_FOUND",
+            errorCode: "NOT_FOUND",
         });
     }
 
-    return res.status(200).json(videoDoc);
+    return res.status(200).json(aggregation[0]);
 };
 
 const deleteVideo: RequestHandler = async (req, res) => {
@@ -190,42 +298,56 @@ const deleteVideo: RequestHandler = async (req, res) => {
 
     const videoDoc = await Video.findOne({
         _id: videoId,
-        userId: req.user?.id,
+        uploader: req.user?.id,
     });
 
     if (!videoDoc) {
         return res.status(404).json({
             message: "Video not found",
-            errCode: "VIDEO_NOT_FOUND",
+            errCode: "NOT_FOUND",
         });
     }
 
     const videoJob = await VideoJob.findOne({ videoId: videoDoc._id });
 
-    await videoDoc.deleteOne();
+    await Promise.all([
+        videoDoc.deleteOne(),
+        VideoMetrics.deleteOne({ videoId: videoDoc._id.toString() }),
+    ]);
 
     if (videoJob) {
         await videoProcessQueue.remove(videoJob.jobId);
-        await videoJob.deleteOne();
+        await videoJob.deleteOne().catch(() => {});
     }
 
-    await fs
-        .rmdir(path.join(settings.OUTPUT_VIDEOS_DIR, videoDoc.uniqueFileName), {
-            recursive: true,
-        })
-        .catch(() => {});
+    await Promise.all([
+        // Delete video files
+        fs
+            .rmdir(
+                path.join(settings.OUTPUT_VIDEOS_DIR, videoDoc.uniqueFileName),
+                {
+                    recursive: true,
+                }
+            )
+            .catch(() => {}),
 
-    await fs
-        .unlink(
-            path.join(settings.BASE_DIR, "uploads", videoDoc.uniqueFileName)
-        )
-        .catch(() => {});
+        // Delete original uploaded file
+        fs
+            .unlink(
+                path.join(settings.BASE_DIR, "uploads", videoDoc.uniqueFileName)
+            )
+            .catch(() => {}),
+
+        VideoReaction.deleteMany({ videoId: videoDoc._id }), // ENHANCEMENT: Consider using a background job to improve performance
+    ]);
 
     return res.status(204).json({});
 };
 
 const search: RequestHandler = async (req, res) => {
     const query = req.query.q as string;
+    const page = parseInt((req.query.page as string) ?? "1", 10);
+    const limit = parseInt((req.query.limit as string) ?? "10", 10);
 
     if (query?.trim()?.length === 0) {
         return res.status(400).json({
@@ -245,7 +367,7 @@ const search: RequestHandler = async (req, res) => {
         {
             $lookup: {
                 from: "users",
-                localField: "userId",
+                localField: "uploader",
                 foreignField: "_id",
                 as: "uploader",
                 pipeline: [
@@ -276,7 +398,46 @@ const search: RequestHandler = async (req, res) => {
             },
         },
         {
-            $sort: { createdAt: -1 },
+            $lookup: {
+                from: "videometrics",
+                let: { videoIdStr: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $eq: ["$videoId", "$$videoIdStr"],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            views: 1,
+                            likes: 1,
+                            dislikes: 1,
+                        },
+                    },
+                ],
+                as: "metrics",
+            },
+        },
+        {
+            $unwind: {
+                path: "$metrics",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $sort: {
+                "metrics.views": -1,
+                createdAt: -1,
+            },
+        },
+        {
+            $skip: (page - 1) * limit,
+        },
+        {
+            $limit: limit,
         },
     ]);
 
@@ -293,7 +454,7 @@ const watch: RequestHandler = async (req, res) => {
         });
     }
 
-    const videoDoc = await Video.aggregate([
+    const videoDocs = await Video.aggregate([
         {
             $match: {
                 _id: new mongoose.Types.ObjectId(videoId),
@@ -304,7 +465,7 @@ const watch: RequestHandler = async (req, res) => {
         {
             $lookup: {
                 from: "users",
-                localField: "userId",
+                localField: "uploader",
                 foreignField: "_id",
                 as: "uploader",
                 pipeline: [
@@ -312,10 +473,84 @@ const watch: RequestHandler = async (req, res) => {
                         $project: {
                             name: 1,
                             avatar: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $unwind: {
+                path: "$uploader",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            // Also compute if the uploader is watching their own video
+            $addFields: {
+                isUploader: {
+                    $eq: [
+                        "$uploader._id",
+                        new mongoose.Types.ObjectId(req.user?.id),
+                    ],
+                },
+            },
+        },
+        {
+            $lookup: {
+                // Fetch the reaction of the current user (if any)
+                from: "videoreactions",
+                let: { videoObjectId: "$_id" },
+                as: "reaction",
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$videoId", "$$videoObjectId"] },
+                                    {
+                                        $eq: [
+                                            "$userId",
+                                            new mongoose.Types.ObjectId(
+                                                req.user?.id
+                                            ),
+                                        ],
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            reaction: 1,
                             _id: 0,
                         },
                     },
                 ],
+            },
+        },
+        {
+            $addFields: {
+                reaction: {
+                    // If no reaction, set to null
+                    $cond: {
+                        if: { $eq: [{ $size: "$reaction" }, 0] },
+                        then: null,
+                        else: "$reaction",
+                    },
+                },
+            },
+        },
+        {
+            $unwind: {
+                path: "$reaction",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $replaceRoot: {
+                newRoot: {
+                    $mergeObjects: ["$$ROOT", "$reaction"],
+                },
             },
         },
         {
@@ -327,24 +562,65 @@ const watch: RequestHandler = async (req, res) => {
                 uploader: 1,
                 availableResolutions: 1,
                 createdAt: 1,
+                isUploader: 1,
+                reaction: 1,
+            },
+        },
+        {
+            $lookup: {
+                from: "videometrics",
+                let: { videoIdStr: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $eq: ["$videoId", "$$videoIdStr"],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            views: 1,
+                            likes: 1,
+                            dislikes: 1,
+                        },
+                    },
+                ],
+                as: "metrics",
             },
         },
         {
             $unwind: {
-                path: "$uploader",
+                path: "$metrics",
                 preserveNullAndEmptyArrays: true,
             },
         },
+        {
+            $limit: 1,
+        },
     ]);
 
-    if (videoDoc.length === 0) {
+    if (videoDocs.length <= 0) {
         return res.status(404).json({
             message: "Video not found",
-            errorCode: "VIDEO_NOT_FOUND",
+            errorCode: "NOT_FOUND",
         });
     }
 
-    return res.status(200).json(videoDoc);
+    const video = videoDocs[0];
+
+    if (!video.isUploader) {
+        await VideoMetrics.findOneAndUpdate(
+            { videoId },
+            { $inc: { views: 1 } }
+        );
+    }
+
+    delete video.isUploader;
+    delete video.uploader._id;
+
+    return res.status(200).json(video);
 };
 
 const edit: RequestHandler = async (req, res) => {
@@ -386,11 +662,11 @@ const edit: RequestHandler = async (req, res) => {
     const videoDoc = await Video.findOneAndUpdate(
         {
             _id: videoId,
-            userId: req.user?.id,
+            uploader: req.user?.id,
         },
         dataToUpdate,
         { new: true }
-    ).select(["-userId", "-__v"]);
+    ).select(["-uploader", "-__v"]);
 
     if (!videoDoc) {
         return res.status(404).json({
@@ -433,4 +709,142 @@ const edit: RequestHandler = async (req, res) => {
     });
 };
 
-export { publish, get, getAll, deleteVideo, search, watch, edit };
+const like: RequestHandler = async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!mongooseObjectIdValidator.safeParse(videoId).success) {
+        return res.status(400).json({
+            message: "Invalid video ID",
+            errorCode: "INVALID_VIDEO_ID",
+        });
+    }
+
+    const video = await Video.findOne({
+        _id: videoId,
+        visibility: "public",
+        status: "finished",
+    });
+
+    if (!video) {
+        return res.status(404).json({
+            error: "Video not found",
+            errorCode: "NOT_FOUND",
+        });
+    }
+
+    if (video.uploader.toString() === req.user?.id) {
+        return res.status(400).json({
+            error: "You cannot like your own video",
+            errorCode: "CANNOT_LIKE_OWN_VIDEO",
+        });
+    }
+
+    const existingReaction = await VideoReaction.findOne({
+        videoId,
+        userId: req.user?.id,
+    });
+
+    // If no existing reaction, create a new like
+    if (!existingReaction) {
+        await VideoReaction.create({
+            videoId: new mongoose.Types.ObjectId(videoId),
+            userId: new mongoose.Types.ObjectId(req.user?.id),
+            reaction: "like",
+        });
+    } else {
+        if (existingReaction.reaction === "like") {
+            // If the existing reaction is a like, remove it (toggle off)
+            await existingReaction.deleteOne();
+
+            return res.status(200).json({
+                message: "Reaction updated successfully",
+                updatedReaction: null,
+            });
+        } else {
+            // If the existing reaction is a dislike, change it to like
+            existingReaction.reaction = "like";
+            await existingReaction.save();
+        }
+    }
+
+    return res.status(200).json({
+        message: "Reaction updated successfully",
+        updatedReaction: "like",
+    });
+};
+
+const dislike: RequestHandler = async (req, res) => {
+    const videoId = req.params.videoId;
+
+    if (!mongooseObjectIdValidator.safeParse(videoId).success) {
+        return res.status(400).json({
+            message: "Invalid video ID",
+            errorCode: "INVALID_VIDEO_ID",
+        });
+    }
+
+    const video = await Video.findOne({
+        _id: videoId,
+        visibility: "public",
+        status: "finished",
+    });
+
+    if (!video) {
+        return res.status(404).json({
+            error: "Video not found",
+            errorCode: "NOT_FOUND",
+        });
+    }
+
+    if (video.uploader.toString() === req.user?.id) {
+        return res.status(400).json({
+            error: "You cannot dislike your own video",
+            errorCode: "CANNOT_DISLIKE_OWN_VIDEO",
+        });
+    }
+
+    const existingReaction = await VideoReaction.findOne({
+        videoId,
+        userId: req.user?.id,
+    });
+
+    // If no existing reaction, create a new dislike
+    if (!existingReaction) {
+        await VideoReaction.create({
+            videoId: new mongoose.Types.ObjectId(videoId),
+            userId: new mongoose.Types.ObjectId(req.user?.id),
+            reaction: "dislike",
+        });
+    } else {
+        if (existingReaction.reaction === "dislike") {
+            // If the existing reaction is a dislike, remove it (toggle off)
+            await existingReaction.deleteOne();
+
+            return res.status(200).json({
+                message: "Reaction updated successfully",
+                updatedReaction: null,
+            });
+        } else {
+            // If the existing reaction is a like, change it to dislike
+            existingReaction.reaction = "dislike";
+            await existingReaction.save();
+        }
+    }
+
+    return res.status(200).json({
+        message: "Reaction updated successfully",
+        updatedReaction: "dislike",
+    });
+};
+
+export {
+    publish,
+    get,
+    getAll,
+    deleteVideo,
+    search,
+    watch,
+    edit,
+    like,
+    dislike,
+};
