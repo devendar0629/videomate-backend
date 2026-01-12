@@ -1,3 +1,10 @@
+interface VideoMetaData {
+    width: number;
+    height: number;
+    hasAudio: boolean;
+    duration: number;
+}
+
 type ResolutionSettings = {
     name: string;
     width: number;

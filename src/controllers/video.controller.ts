@@ -389,6 +389,7 @@ const search: RequestHandler = async (req, res) => {
                 availableResolutions: 1,
                 createdAt: 1,
                 uploader: 1,
+                duration: 1,
             },
         },
         {
@@ -564,6 +565,7 @@ const watch: RequestHandler = async (req, res) => {
                 createdAt: 1,
                 isUploader: 1,
                 reaction: 1,
+                duration: 1,
             },
         },
         {
@@ -617,7 +619,6 @@ const watch: RequestHandler = async (req, res) => {
         );
     }
 
-    delete video.isUploader;
     delete video.uploader._id;
 
     return res.status(200).json(video);

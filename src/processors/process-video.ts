@@ -46,7 +46,8 @@ const generateThumbnail = async (videoFilePath: string, outputPath: string) => {
 
 const transcodeVideoToDownscaleResolutions = async (
     inputFilePath: string,
-    outputPath: string
+    outputPath: string,
+    videoMetaData: VideoMetaData
 ): Promise<ResolutionName[]> => {
     return new Promise(async (resolve, reject) => {
         await fs.mkdir(outputPath, { recursive: true }).catch((err) => {
@@ -55,8 +56,6 @@ const transcodeVideoToDownscaleResolutions = async (
         });
 
         try {
-            const videoMetaData = await getVideoMetaData(inputFilePath);
-
             const downscaleResolutions = RESOLUTION_SETTINGS.filter(
                 (res) =>
                     res.height <= videoMetaData.height &&
@@ -125,14 +124,21 @@ const processVideo: Processor = async (job) => {
         videoDoc.status = "processing";
         await videoDoc.save();
 
+        const videoMetaData = await getVideoMetaData(videoPath);
+
         const [availableResolutions] = await Promise.all([
-            transcodeVideoToDownscaleResolutions(videoPath, outputPath),
+            transcodeVideoToDownscaleResolutions(
+                videoPath,
+                outputPath,
+                videoMetaData
+            ),
             generateThumbnail(videoPath, `${outputPath}/thumbnail.jpg`),
         ]);
 
         videoDoc.availableResolutions = availableResolutions;
         videoDoc.status = "finished";
         videoDoc.uniqueFileName = path.basename(outputPath);
+        videoDoc.duration = videoMetaData.duration;
 
         if (newOriginalFileName) {
             videoDoc.originalFileName = newOriginalFileName;

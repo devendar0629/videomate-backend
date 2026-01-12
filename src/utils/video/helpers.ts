@@ -1,10 +1,5 @@
 import { spawn } from "child_process";
 
-interface VideoMetaData {
-    width: number;
-    height: number;
-    hasAudio: boolean;
-}
 type ResolutionSettings = {
     name: string;
     width: number;
@@ -20,8 +15,10 @@ const getVideoMetaData = (filePath: string): Promise<VideoMetaData> => {
         const ffprobeArgs = [
             "-v", "quiet",
             "-print_format", "json",
-            "-show_streams", filePath
-        ]
+            "-show_streams",
+            "-show_format",
+            filePath
+        ];
 
         const ffprobeChildProcess = spawn("ffprobe", ffprobeArgs);
 
@@ -62,10 +59,16 @@ const getVideoMetaData = (filePath: string): Promise<VideoMetaData> => {
 
                 const { width, height } = videoStream;
 
+                // duration is a string in seconds → convert to number
+                const duration = data.format?.duration
+                    ? parseFloat(data.format.duration)
+                    : 0;
+
                 resolve({
                     width,
                     height,
                     hasAudio,
+                    duration,
                 });
             } catch (err) {
                 reject(err);
