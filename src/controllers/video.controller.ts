@@ -151,7 +151,6 @@ const publish: RequestHandler = async (req, res) => {
     });
 };
 
-// TODO: Add metrics
 const getAll: RequestHandler = async (req, res) => {
     const page = parseInt((req.query.page as string) ?? "1", 10);
     const limit = parseInt((req.query.limit as string) ?? "10", 10);
@@ -212,7 +211,6 @@ const getAll: RequestHandler = async (req, res) => {
     return res.status(200).json(aggregatedVideos);
 };
 
-// TODO: Add metrics
 const get: RequestHandler = async (req, res) => {
     const videoId = req.params.videoId;
 
