@@ -745,17 +745,29 @@ const like: RequestHandler = async (req, res) => {
         userId: req.user?.id,
     });
 
-    // If no existing reaction, create a new like
     if (!existingReaction) {
-        await VideoReaction.create({
-            videoId: new mongoose.Types.ObjectId(videoId),
-            userId: new mongoose.Types.ObjectId(req.user?.id),
-            reaction: "like",
-        });
+        // If no existing reaction, create a new like
+        await Promise.all([
+            VideoMetrics.findOneAndUpdate(
+                { videoId: video._id },
+                { $inc: { likes: 1 } }
+            ),
+            VideoReaction.create({
+                videoId: new mongoose.Types.ObjectId(videoId),
+                userId: new mongoose.Types.ObjectId(req.user?.id),
+                reaction: "like",
+            }),
+        ]);
     } else {
         if (existingReaction.reaction === "like") {
             // If the existing reaction is a like, remove it (toggle off)
-            await existingReaction.deleteOne();
+            await Promise.all([
+                VideoMetrics.findOneAndUpdate(
+                    { videoId: video._id },
+                    { $inc: { likes: -1 } }
+                ),
+                existingReaction.deleteOne(),
+            ]);
 
             return res.status(200).json({
                 message: "Reaction updated successfully",
@@ -763,8 +775,15 @@ const like: RequestHandler = async (req, res) => {
             });
         } else {
             // If the existing reaction is a dislike, change it to like
-            existingReaction.reaction = "like";
-            await existingReaction.save();
+            await Promise.all([
+                VideoMetrics.findOneAndUpdate(
+                    { videoId: video._id },
+                    { $inc: { likes: 1, dislikes: -1 } }
+                ),
+                existingReaction.updateOne({
+                    reaction: "like",
+                }),
+            ]);
         }
     }
 
@@ -809,17 +828,29 @@ const dislike: RequestHandler = async (req, res) => {
         userId: req.user?.id,
     });
 
-    // If no existing reaction, create a new dislike
     if (!existingReaction) {
-        await VideoReaction.create({
-            videoId: new mongoose.Types.ObjectId(videoId),
-            userId: new mongoose.Types.ObjectId(req.user?.id),
-            reaction: "dislike",
-        });
+        // If no existing reaction, create a new dislike
+        await Promise.all([
+            VideoMetrics.findOneAndUpdate(
+                { videoId: video._id },
+                { $inc: { dislikes: 1 } }
+            ),
+            VideoReaction.create({
+                videoId: new mongoose.Types.ObjectId(videoId),
+                userId: new mongoose.Types.ObjectId(req.user?.id),
+                reaction: "dislike",
+            }),
+        ]);
     } else {
         if (existingReaction.reaction === "dislike") {
             // If the existing reaction is a dislike, remove it (toggle off)
-            await existingReaction.deleteOne();
+            await Promise.all([
+                VideoMetrics.findOneAndUpdate(
+                    { videoId: video._id },
+                    { $inc: { dislikes: -1 } }
+                ),
+                existingReaction.deleteOne(),
+            ]);
 
             return res.status(200).json({
                 message: "Reaction updated successfully",
@@ -827,8 +858,15 @@ const dislike: RequestHandler = async (req, res) => {
             });
         } else {
             // If the existing reaction is a like, change it to dislike
-            existingReaction.reaction = "dislike";
-            await existingReaction.save();
+            await Promise.all([
+                VideoMetrics.findOneAndUpdate(
+                    { videoId: video._id },
+                    { $inc: { likes: -1, dislikes: 1 } }
+                ),
+                existingReaction.updateOne({
+                    reaction: "dislike",
+                }),
+            ]);
         }
     }
 
