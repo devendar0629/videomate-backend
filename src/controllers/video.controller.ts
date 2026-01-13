@@ -342,6 +342,186 @@ const deleteVideo: RequestHandler = async (req, res) => {
     return res.status(204).json({});
 };
 
+const getLikedVideos: RequestHandler = async (req, res) => {
+    const currUserId = req.user?.id;
+    const page = parseInt((req.query.page as string) ?? "1", 10);
+    const limit = parseInt((req.query.limit as string) ?? "10", 10);
+
+    const likedVideos = await VideoReaction.aggregate([
+        {
+            $match: {
+                userId: new mongoose.Types.ObjectId(currUserId),
+                reaction: "like",
+            },
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "videoId",
+                foreignField: "_id",
+                as: "video",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "uploader",
+                            foreignField: "_id",
+                            as: "uploader",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        _id: 0,
+                                        name: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $unwind: {
+                            path: "$uploader",
+                            preserveNullAndEmptyArrays: true,
+                        },
+                    },
+                    {
+                        $project: {
+                            uniqueFileName: 1,
+                            title: 1,
+                            description: 1,
+                            uploader: 1,
+                            duration: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $addFields: {
+                likedAt: "$$ROOT.updatedAt",
+            },
+        },
+        {
+            $unwind: {
+                path: "$video",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $replaceRoot: {
+                newRoot: {
+                    $mergeObjects: ["$video", "$$ROOT"],
+                },
+            },
+        },
+        {
+            $project: {
+                _id: 0,
+                video: 1,
+                likedAt: 1,
+            },
+        },
+        {
+            $skip: (page - 1) * limit,
+        },
+        {
+            $limit: limit,
+        },
+    ]);
+
+    return res.json(likedVideos);
+};
+
+const getDislikedVideos: RequestHandler = async (req, res) => {
+    const currUserId = req.user?.id;
+    const page = parseInt((req.query.page as string) ?? "1", 10);
+    const limit = parseInt((req.query.limit as string) ?? "10", 10);
+
+    const dislikedVideos = await VideoReaction.aggregate([
+        {
+            $match: {
+                userId: new mongoose.Types.ObjectId(currUserId),
+                reaction: "dislike",
+            },
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "videoId",
+                foreignField: "_id",
+                as: "video",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "uploader",
+                            foreignField: "_id",
+                            as: "uploader",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        _id: 0,
+                                        name: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $unwind: {
+                            path: "$uploader",
+                            preserveNullAndEmptyArrays: true,
+                        },
+                    },
+                    {
+                        $project: {
+                            uniqueFileName: 1,
+                            title: 1,
+                            description: 1,
+                            uploader: 1,
+                            duration: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $addFields: {
+                dislikedAt: "$$ROOT.updatedAt",
+            },
+        },
+        {
+            $unwind: {
+                path: "$video",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $replaceRoot: {
+                newRoot: {
+                    $mergeObjects: ["$video", "$$ROOT"],
+                },
+            },
+        },
+        {
+            $project: {
+                _id: 0,
+                video: 1,
+                dislikedAt: 1,
+            },
+        },
+        {
+            $skip: (page - 1) * limit,
+        },
+        {
+            $limit: limit,
+        },
+    ]);
+
+    return res.json(dislikedVideos);
+};
+
 const search: RequestHandler = async (req, res) => {
     const query = req.query.q as string;
     const page = parseInt((req.query.page as string) ?? "1", 10);
@@ -879,6 +1059,8 @@ export {
     get,
     getAll,
     deleteVideo,
+    getLikedVideos,
+    getDislikedVideos,
     search,
     watch,
     edit,

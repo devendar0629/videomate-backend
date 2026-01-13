@@ -16,6 +16,8 @@ import {
     getAll,
     get,
     publish,
+    getLikedVideos,
+    getDislikedVideos,
     search,
     watch,
     edit,
@@ -36,6 +38,8 @@ router.post(
 );
 router.get("/all", getAll);
 router.get("/search", search);
+router.get("/liked", getLikedVideos);
+router.get("/disliked", getDislikedVideos);
 router.get("/:videoId/watch", watch);
 router.get("/:videoId", get);
 router.delete("/:videoId", deleteVideo);
