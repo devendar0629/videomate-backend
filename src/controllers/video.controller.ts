@@ -1,16 +1,19 @@
 import type { RequestHandler } from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
-import settings from "../../settings";
-import videoProcessQueue from "../queues/process-video";
-import Video, { type TVideo } from "../models/video/video.model";
-import VideoJob from "../models/video/job.model";
+import settings from "../../settings.js";
+import videoProcessQueue from "../queues/process-video.js";
+import Video, { type TVideo } from "../models/video/video.model.js";
+import VideoJob from "../models/video/job.model.js";
 import z from "zod";
-import { formatZodErrors, mongooseObjectIdValidator } from "../utils/helpers";
-import User from "../models/user.model";
+import {
+    formatZodErrors,
+    mongooseObjectIdValidator,
+} from "../utils/helpers.js";
+import User from "../models/user.model.js";
 import mongoose from "mongoose";
-import VideoMetrics from "../models/video/metrics.model";
-import VideoReaction from "../models/video/reaction.model";
+import VideoMetrics from "../models/video/metrics.model.js";
+import VideoReaction from "../models/video/reaction.model.js";
 
 // --------------------------------- VALIDATION SCHEMAS ---------------------------------
 
@@ -224,7 +227,7 @@ const get: RequestHandler = async (req, res) => {
     const aggregation = await Video.aggregate([
         {
             $match: {
-                _id: new mongoose.Types.ObjectId(videoId),
+                _id: new mongoose.Types.ObjectId(videoId as string),
                 uploader: new mongoose.Types.ObjectId(req.user?.id),
             },
         },
@@ -322,10 +325,7 @@ const deleteVideo: RequestHandler = async (req, res) => {
         // Delete video files
         fs
             .rmdir(
-                path.join(settings.OUTPUT_VIDEOS_DIR, videoDoc.uniqueFileName),
-                {
-                    recursive: true,
-                }
+                path.join(settings.OUTPUT_VIDEOS_DIR, videoDoc.uniqueFileName)
             )
             .catch(() => {}),
 
@@ -636,7 +636,7 @@ const watch: RequestHandler = async (req, res) => {
     const videoDocs = await Video.aggregate([
         {
             $match: {
-                _id: new mongoose.Types.ObjectId(videoId),
+                _id: new mongoose.Types.ObjectId(videoId as string),
                 visibility: "public",
                 status: "finished",
             },
@@ -931,7 +931,7 @@ const like: RequestHandler = async (req, res) => {
                 { $inc: { likes: 1 } }
             ),
             VideoReaction.create({
-                videoId: new mongoose.Types.ObjectId(videoId),
+                videoId: new mongoose.Types.ObjectId(videoId as string),
                 userId: new mongoose.Types.ObjectId(req.user?.id),
                 reaction: "like",
             }),
@@ -1014,7 +1014,7 @@ const dislike: RequestHandler = async (req, res) => {
                 { $inc: { dislikes: 1 } }
             ),
             VideoReaction.create({
-                videoId: new mongoose.Types.ObjectId(videoId),
+                videoId: new mongoose.Types.ObjectId(videoId as string),
                 userId: new mongoose.Types.ObjectId(req.user?.id),
                 reaction: "dislike",
             }),

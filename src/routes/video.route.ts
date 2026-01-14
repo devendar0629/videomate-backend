@@ -1,12 +1,12 @@
 import { Router } from "express";
-import getMulterMiddleware from "../lib/multer";
-import settings from "../../settings";
+import getMulterMiddleware from "../lib/multer.js";
+import settings from "../../settings.js";
 
 const router = Router();
 
 // --------------------------------- MIDDLEWARES ---------------------------------
 
-import { ensureAccessToken } from "../middlewares/auth.middleware";
+import { ensureAccessToken } from "../middlewares/auth.middleware.js";
 router.use(ensureAccessToken);
 
 // --------------------------------- ROUTES ---------------------------------
@@ -23,7 +23,7 @@ import {
     edit,
     like,
     dislike,
-} from "../controllers/video.controller";
+} from "../controllers/video.controller.js";
 
 router.post(
     "/publish",

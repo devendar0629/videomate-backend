@@ -1,20 +1,27 @@
-import server from "./src/server";
-import settings from "./settings";
-import { connectDB } from "./src/lib/db";
+import server from "./src/server.js";
+import settings from "./settings.js";
+import { connectDB } from "./src/lib/db.js";
 
 const SERVER_PORT = settings.SERVER_PORT;
 
-await connectDB()
-    .then(() => {
+async function startApp() {
+    try {
+        await connectDB();
         console.log("✅ DB connected successfully");
-    })
-    .catch((err) => {
-        console.log("❌ DB connection failed", err);
-    });
+    } catch (err) {
+        console.error("❌ DB connection failed", err);
+        process.exit(1);
+    }
 
-server.listen(SERVER_PORT, async () => {
-    console.log();
-    console.log("Server started.");
-    console.log(`Local: http://localhost:${SERVER_PORT}`);
-    console.log();
+    server.listen(SERVER_PORT, () => {
+        console.log();
+        console.log("✨ Server started.");
+        console.log(`✨ Local: http://localhost:${SERVER_PORT}`);
+        console.log();
+    });
+}
+
+startApp().catch((err) => {
+    console.error("❌ Fatal error during startup:", err);
+    process.exit(1);
 });

@@ -1,7 +1,7 @@
 import type { RequestHandler } from "express";
 import z from "zod";
-import User from "../models/user.model";
-import { formatZodErrors } from "../utils/helpers";
+import User from "../models/user.model.js";
+import { formatZodErrors } from "../utils/helpers.js";
 
 const _editDetailsPayloadSchema = z
     .strictObject(

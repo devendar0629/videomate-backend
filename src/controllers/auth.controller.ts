@@ -1,8 +1,8 @@
 import type { RequestHandler } from "express";
 import z from "zod";
-import { formatZodErrors } from "../utils/helpers";
-import User from "../models/user.model";
-import settings from "../../settings";
+import { formatZodErrors } from "../utils/helpers.js";
+import User from "../models/user.model.js";
+import settings from "../../settings.js";
 
 // ------------------- VALIDATION SCHEMAS -------------------
 

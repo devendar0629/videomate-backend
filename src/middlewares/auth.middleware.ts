@@ -1,6 +1,6 @@
 import type { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
-import settings from "../../settings";
+import settings from "../../settings.js";
 
 const ensureAccessToken: RequestHandler = async (req, res, next) => {
     const authHeader = req.headers.authorization;

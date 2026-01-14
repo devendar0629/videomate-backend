@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "bun run --watch index.ts",
-    "worker:video": "bun run --watch src/workers/process-video.ts",
+    "worker:video": "node ./dist/src/workers/process-video.js",
+    "start": "node ./dist/index.js",
     "build": "tsc"
   },
   "devDependencies": {
@@ -17,7 +18,7 @@
     "@types/multer": "^2.0.0"
   },
   "peerDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "argon2": "^0.44.0",

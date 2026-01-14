@@ -6,7 +6,8 @@ const SERVER_PORT = process.env.SERVER_PORT ?? 3000;
 const SUPPORTED_VIDEO_FORMAT_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv"];
 const MAX_VIDEO_FILE_SIZE_MEGABYTES = 500;
 const MAX_VIDEO_FILE_SIZE_BYTES = MAX_VIDEO_FILE_SIZE_MEGABYTES * 1024 * 1024;
-const BASE_DIR = __dirname;
+// const BASE_DIR = __dirname;
+const BASE_DIR = import.meta.dirname;
 const RESOLUTION_SETTINGS = [
     {
         name: "144p",
@@ -74,9 +75,11 @@ const RESOLUTION_SETTINGS = [
     },
 ];
 
-const OUTPUT_VIDEOS_DIR = path.join(BASE_DIR, "/data/videos");
-const UPLOADS_DIR = path.join(BASE_DIR, "/uploads");
-const AVATARS_DIR = path.join(BASE_DIR, "/data/avatars");
+const OUTPUT_VIDEOS_DIR =
+    process.env.OUTPUT_VIDEOS_DIR ?? path.join(BASE_DIR, "/data/videos");
+const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.join(BASE_DIR, "/uploads");
+const AVATARS_DIR =
+    process.env.AVATARS_DIR ?? path.join(BASE_DIR, "/data/avatars");
 
 const ACCESS_TOKEN_EXP_SECS = parseInt(
     process.env.ACCESS_TOKEN_EXP_SECS ?? "900"

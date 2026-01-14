@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
-import { processVideo } from "../processors/process-video";
-import { connectDB } from "../lib/db";
+import { processVideo } from "../processors/process-video.js";
+import { connectDB } from "../lib/db.js";
 
 async function initVideoProcessorWorker() {
     await connectDB().then(() => {

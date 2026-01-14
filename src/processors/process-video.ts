@@ -1,13 +1,13 @@
 import fs from "fs/promises";
 import { spawn } from "child_process";
-import { RESOLUTION_SETTINGS } from "../../settings";
+import { RESOLUTION_SETTINGS } from "../../settings.js";
 import type { Processor } from "bullmq";
-import Video from "../models/video/video.model";
+import Video from "../models/video/video.model.js";
 import {
     buildFFmpegTranscodeArgs,
     getVideoMetaData,
-} from "../utils/video/helpers";
-import VideoJob from "../models/video/job.model";
+} from "../utils/video/helpers.js";
+import VideoJob from "../models/video/job.model.js";
 import path from "path";
 
 const generateThumbnail = async (videoFilePath: string, outputPath: string) => {
@@ -94,7 +94,7 @@ const transcodeVideoToDownscaleResolutions = async (
                 );
             });
         } catch (error) {
-            await fs.rmdir(outputPath, { recursive: true });
+            await fs.rmdir(outputPath);
             reject(error);
         }
     });
@@ -151,7 +151,7 @@ const processVideo: Processor = async (job) => {
         ]);
 
         if (oldVideoPath) {
-            await fs.rmdir(oldVideoPath, { recursive: true });
+            await fs.rmdir(oldVideoPath);
         }
     } catch (error) {
         await Video.findByIdAndUpdate(videoDocId, { status: "error" });

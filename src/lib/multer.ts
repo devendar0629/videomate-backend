@@ -1,7 +1,7 @@
 import multer, { type Options as MulterOptions } from "multer";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import settings from "../../settings";
+import settings from "../../settings.js";
 
 const getMulterMiddleware = (options?: MulterOptions, storagePath?: string) => {
     return multer({

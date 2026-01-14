@@ -24,9 +24,65 @@ services:
     volumes:
       - database_data:/data/db
 
+  backend:
+    build: .
+    command: ["npm", "run", "start"]
+    container_name: videomate_backend
+    env_file:
+      - .env.prod
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_data:/app/data:rw
+      - app_uploads:/app/uploads:rw
+    depends_on:
+      - task_broker
+      - database
+    networks:
+      - backend_network
+
+  video_worker:
+    build: .
+    command: ["npm", "run", "worker:video"]
+    container_name: videomate_video_worker
+    env_file:
+      - .env.prod
+    volumes:
+      - app_data:/app/data:rw
+      - app_uploads:/app/uploads:rw
+    depends_on:
+      - task_broker
+      - database
+    networks:
+      - backend_network
+
+  frontend:
+    build:
+      context: ../frontend
+      secrets:
+        - env_file
+    container_name: videomate_frontend
+    volumes:
+      - ../frontend/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - app_data:/app/data:rw
+      - app_uploads:/app/uploads:rw
+    ports:
+      - "5173:80"
+    networks:
+      - backend_network
+    depends_on:
+      - backend
+
+
+secrets:
+  env_file:
+    file: ../frontend/.env
+
 networks:
   backend_network:
 
 volumes:
   database_data:
   task_broker_data:
+  app_data:
+  app_uploads:

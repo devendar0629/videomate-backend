@@ -1,7 +1,7 @@
 import e from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import settings from "../settings";
+import settings from "../settings.js";
 
 const app = e();
 
@@ -21,8 +21,8 @@ app.use("/avatars", e.static(settings.AVATARS_DIR));
 
 // -------------- ROUTING --------------
 
-import apiRouter from "./routes/api.route";
-import authRouter from "./routes/auth.route";
+import apiRouter from "./routes/api.route.js";
+import authRouter from "./routes/auth.route.js";
 
 app.use("/api", apiRouter);
 app.use("/auth", authRouter);

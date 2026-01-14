@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { editDetails, getProfile } from "../controllers/user.controller";
-import { ensureAccessToken } from "../middlewares/auth.middleware";
-import getMulterMiddleware from "../lib/multer";
-import settings from "../../settings";
+import { editDetails, getProfile } from "../controllers/user.controller.js";
+import { ensureAccessToken } from "../middlewares/auth.middleware.js";
+import getMulterMiddleware from "../lib/multer.js";
+import settings from "../../settings.js";
 
 const router = Router();
 

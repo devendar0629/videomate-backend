@@ -5,11 +5,11 @@ import {
     logout,
     renewTokens,
     signup,
-} from "../controllers/auth.controller";
+} from "../controllers/auth.controller.js";
 import {
     ensureAccessAndRefreshTokens,
     ensureRefreshToken,
-} from "../middlewares/auth.middleware";
+} from "../middlewares/auth.middleware.js";
 
 const router = Router();
 

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import argon2 from "argon2";
 import jwt from "jsonwebtoken";
-import settings from "../../settings";
+import settings from "../../settings.js";
 
 interface I_UserMethods {
     checkPassword(password: string): Promise<boolean>;
